@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nova AI Assistant</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+</head>
+<body>
+  <div class="container">
+    
+    <h1>🤖 Nova AI Assistant</h1>
+    <p class="subtitle">Real-time Voice AI • Powered by Groq</p>
+    
+    <div class="robot-container">
+      <lottie-player src="AI Robot.json"
+      background="transparent"
+      speed="1"
+      style="width:150px; height:150px;"
+      loop
+      autoplay></lottie-player>
+    </div>
+    
+
+    <div class="chat-box" id="chatBox"></div>
+
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="Ask anything... (Type or use voice)">
+      <button onclick="sendMessage()">➤ Send</button>
+    </div>
+
+    <div class="btn-group">
+      <button onclick="startVoiceInput()">🎤 Voice Input</button>
+      <button onclick="clearChat()">Clear Chat</button>
+    </div>
+
+    <footer>
+      🤖 Nova AI Assistant Built with ❤️ by Saroj Kumar
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

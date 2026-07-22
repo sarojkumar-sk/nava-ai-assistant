@@ -1,0 +1,83 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  color: white;
+  margin: 0;
+  padding: 10px;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+}
+
+.container { text-align: center; max-width: 500px; width: 95%; margin: 10px auto; padding-bottom: 20px; }
+
+h1 { color: #00ffcc; text-shadow: 0 0 20px #00ffcc; margin-bottom: 15px; }
+
+.robot-container {
+  margin: 5px auto;
+  width: 140px;
+  height: 140px;
+}
+
+#robot {
+  width: 100%;
+  height: 100%;
+  border-radius: 25px;
+  box-shadow: 0 0 50px rgba(0, 255, 204, 0.8);
+  animation: breathing 4s infinite ease-in-out;
+}
+
+@keyframes breathing {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+.chat-box {
+  background: rgba(0,0,0,0.45);
+  border-radius: 18px;
+  padding: 15px;
+  height: 160px;
+  overflow-y: auto;
+  text-align: left;
+  border: 1px solid #00ffcc33;
+  margin-bottom: 15px;
+  width: 100%;
+}
+
+.message {
+  margin: 10px 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  max-width: 85%;
+}
+
+.bot-message { background: rgba(0,255,204,0.18); color: #a0ffe0; }
+.user-message { background: rgba(255,255,255,0.15); margin-left: auto; }
+
+.input-area { display: flex; margin-bottom: 12px; }
+input { flex: 1; padding: 14px; border-radius: 30px 0 0 30px; background: rgba(255,255,255,0.1); color: white; border: none; margin-top: 10px; }
+button { padding: 14px 26px; background: #00ffcc; color: black; font-weight: bold; border: none; border-radius: 0 30px 30px 0; cursor: pointer; margin-top: 10px; }
+
+.btn-group button {
+  margin: 8px 6px;
+  padding: 12px 20px;
+  border-radius: 30px;
+  background: #00ccaa;
+}
+.subtitle {
+  color: #00ffcc;
+  margin-bottom: 10px;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+footer {
+  margin-top: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #ffffff;
+  opacity: 0.8;
+  
+}
