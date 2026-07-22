@@ -47,7 +47,7 @@ async function sendMessage() {
   //robot.style.animation = 'breathing 0.8s infinite';
 
   try {
-    const res = await fetch('http://127.0.0.1:8000/chat', {
+    const res = await fetch('https://nava-ai-assistant.onrender.com/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })
