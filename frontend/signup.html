@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Nova AI Assistant — Create your account">
+  <title>Nova — Create Account</title>
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@2.0.8/dist/lottie-player.js"></script>
+  <style>
+    /* ── Design tokens ───────────────────────────────────────── */
+    :root {
+      --accent:         #7c6ef8;
+      --accent-hover:   #6a5de8;
+      --accent-2:       #a78bfa;
+      --accent-glow:    rgba(124, 110, 248, 0.28);
+      --accent-subtle:  rgba(124, 110, 248, 0.10);
+      --bg-base:        #0d0d14;
+      --bg-card:        #13131e;
+      --bg-input:       #1a1a28;
+      --border-subtle:  rgba(255, 255, 255, 0.05);
+      --border-medium:  rgba(255, 255, 255, 0.09);
+      --border-focus:   rgba(124, 110, 248, 0.55);
+      --text-primary:   #e8e8f0;
+      --text-secondary: #8e8ea8;
+      --text-muted:     #52526a;
+      --error-bg:       rgba(239, 68, 68, 0.10);
+      --error-border:   rgba(239, 68, 68, 0.28);
+      --error-text:     #fca5a5;
+      --success-bg:     rgba(52, 211, 153, 0.10);
+      --success-border: rgba(52, 211, 153, 0.28);
+      --success-text:   #6ee7b7;
+      --r-sm:           8px;
+      --r-md:           14px;
+      --r-lg:           22px;
+      --r-full:         9999px;
+      --t-fast:         0.15s ease;
+      --t-med:          0.25s ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    /* ── Page ─────────────────────────────────────────────────── */
+    html, body {
+      min-height: 100%;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -100px; left: 50%;
+      transform: translateX(-50%);
+      width: 700px; height: 700px;
+      background: radial-gradient(ellipse at center,
+        rgba(124,110,248,0.07) 0%, transparent 68%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Card ─────────────────────────────────────────────────── */
+    .auth-card {
+      position: relative;
+      z-index: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--r-lg);
+      padding: 40px 36px 36px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.45),
+                  0 0 0 1px rgba(124,110,248,0.06);
+    }
+
+    /* ── Robot avatar ─────────────────────────────────────────── */
+    .auth-avatar {
+      width: 68px;
+      height: 68px;
+      margin: 0 auto 18px;
+      display: block;
+    }
+
+    /* ── Heading ──────────────────────────────────────────────── */
+    .auth-title {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text-primary);
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .auth-subtitle {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    /* ── Form elements ────────────────────────────────────────── */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .field-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 11px 14px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: var(--bg-input);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--r-sm);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color var(--t-fast), box-shadow var(--t-fast);
+      -webkit-appearance: none;
+    }
+
+    .text-input::placeholder { color: var(--text-muted); }
+
+    .text-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(124,110,248,0.12);
+    }
+
+    /* ── Password wrapper ─────────────────────────────────────── */
+    .pw-wrap { position: relative; }
+    .pw-wrap .text-input { padding-right: 44px; }
+
+    .pw-toggle {
+      position: absolute;
+      right: 12px; top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color var(--t-fast);
+    }
+
+    .pw-toggle:hover { color: var(--text-secondary); }
+
+    /* ── Error / success banners ──────────────────────────────── */
+    .form-error {
+      font-size: 0.82rem;
+      color: var(--error-text);
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      border-radius: var(--r-sm);
+      padding: 9px 12px;
+      line-height: 1.5;
+      display: none;
+      margin-bottom: 14px;
+    }
+
+    .form-error.visible { display: block; }
+
+    .form-success {
+      font-size: 0.84rem;
+      color: var(--success-text);
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      border-radius: var(--r-sm);
+      padding: 9px 12px;
+      line-height: 1.5;
+      display: none;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    .form-success.visible { display: block; }
+
+    /* ── Primary button ───────────────────────────────────────── */
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      margin-top: 4px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--r-md);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+      letter-spacing: 0.2px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      box-shadow: 0 4px 18px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+    .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Spinner inside button */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    .spinner.visible { display: block; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Switch link ──────────────────────────────────────────── */
+    .switch-row {
+      margin-top: 22px;
+      text-align: center;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+    }
+
+    .switch-row a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      margin-left: 4px;
+      transition: color var(--t-fast);
+    }
+
+    .switch-row a:hover { color: var(--accent-2); text-decoration: underline; }
+
+    /* ── Divider ──────────────────────────────────────────────── */
+    .divider {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 26px 0 20px;
+    }
+
+    .divider-line { flex: 1; height: 1px; background: var(--border-subtle); }
+
+    .divider-text {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* ── Features ─────────────────────────────────────────────── */
+    .features { display: flex; flex-direction: column; gap: 8px; }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.83rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .feature-icon {
+      width: 28px; height: 28px;
+      border-radius: var(--r-sm);
+      background: var(--accent-subtle);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.95rem;
+      flex-shrink: 0;
+    }
+
+    /* ── Privacy note ─────────────────────────────────────────── */
+    .privacy-note {
+      margin-top: 20px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .auth-card { padding: 32px 20px 28px; }
+      .auth-title { font-size: 1.35rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="auth-card" role="main" aria-label="Create your Nova account">
+
+    <!-- Robot avatar -->
+    <div class="auth-avatar" aria-hidden="true">
+      <lottie-player
+        src="AI Robot.json"
+        background="transparent"
+        speed="1"
+        loop autoplay>
+      </lottie-player>
+    </div>
+
+    <h1 class="auth-title">Create Account</h1>
+    <p  class="auth-subtitle">Join Nova — your intelligent AI assistant</p>
+
+    <!-- Error / success banners -->
+    <div class="form-error"   id="signupError"   role="alert" aria-live="assertive"></div>
+    <div class="form-success" id="signupSuccess"  aria-live="polite"></div>
+
+    <form id="signupForm" onsubmit="handleSignup(event)" novalidate>
+
+      <div class="field">
+        <label class="field-label" for="signupName">Name</label>
+        <input
+          type="text"
+          id="signupName"
+          class="text-input"
+          placeholder="What should Nova call you?"
+          autocomplete="given-name"
+          maxlength="40"
+          spellcheck="false"
+          required
+          aria-required="true"
+          autofocus
+        >
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="signupEmail">Email</label>
+        <input
+          type="email"
+          id="signupEmail"
+          class="text-input"
+          placeholder="you@example.com"
+          autocomplete="email"
+          inputmode="email"
+          spellcheck="false"
+          autocapitalize="none"
+          required
+          aria-required="true"
+        >
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="signupPassword">Password</label>
+        <div class="pw-wrap">
+          <input
+            type="password"
+            id="signupPassword"
+            class="text-input"
+            placeholder="At least 6 characters"
+            autocomplete="new-password"
+            required
+            aria-required="true"
+          >
+          <button type="button" class="pw-toggle"
+                  onclick="togglePw('signupPassword', this)"
+                  aria-label="Show password">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="signupConfirm">Confirm Password</label>
+        <div class="pw-wrap">
+          <input
+            type="password"
+            id="signupConfirm"
+            class="text-input"
+            placeholder="Repeat your password"
+            autocomplete="new-password"
+            required
+            aria-required="true"
+          >
+          <button type="button" class="pw-toggle"
+                  onclick="togglePw('signupConfirm', this)"
+                  aria-label="Show confirm password">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary" id="signupBtn">
+        <span class="spinner" id="signupSpinner" aria-hidden="true"></span>
+        <span id="signupBtnText">Create Account</span>
+      </button>
+
+    </form>
+
+    <div class="switch-row">
+      Already have an account?
+      <a href="login.html">Log in</a>
+    </div>
+
+    <!-- What you get -->
+    <div class="divider" aria-hidden="true">
+      <div class="divider-line"></div>
+      <span class="divider-text">What you get</span>
+      <div class="divider-line"></div>
+    </div>
+
+    <ul class="features" aria-label="Nova features" role="list">
+      <li class="feature-item">
+        <span class="feature-icon" aria-hidden="true">🎙️</span>
+        <span>Voice input &amp; output in Hinglish</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon" aria-hidden="true">🔧</span>
+        <span>Tools: YouTube, Weather, Web search</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon" aria-hidden="true">📱</span>
+        <span>Android companion for phone actions</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon" aria-hidden="true">🔒</span>
+        <span>Your data is private — never shared</span>
+      </li>
+    </ul>
+
+    <p class="privacy-note">
+      Your password is stored securely by Supabase.<br>
+      Nova never sees or stores your credentials.
+    </p>
+
+  </div><!-- /.auth-card -->
+
+  <!-- config.js sets SUPABASE_URL and SUPABASE_ANON_KEY -->
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    'use strict';
+
+    // Skip signup if already logged in
+    if (isLoggedIn()) {
+      window.location.replace('index.html');
+    }
+
+    // ── Password show/hide toggle ────────────────────────────
+    function togglePw(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.querySelector('svg').innerHTML = show
+        ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8
+              a18.45 18.45 0 0 1 5.06-5.94"/>
+           <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8
+              a18.5 18.5 0 0 1-2.16 3.19"/>
+           <line x1="1" y1="1" x2="23" y2="23"/>`
+        : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+           <circle cx="12" cy="12" r="3"/>`;
+    }
+
+    // ── Generic helpers ──────────────────────────────────────
+    function _showError(msg) {
+      const el = document.getElementById('signupError');
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.add('visible');
+      document.getElementById('signupSuccess')?.classList.remove('visible');
+    }
+
+    function _clearError() {
+      const el = document.getElementById('signupError');
+      if (!el) return;
+      el.textContent = '';
+      el.classList.remove('visible');
+    }
+
+    function _showSuccess(msg) {
+      const el = document.getElementById('signupSuccess');
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.add('visible');
+      document.getElementById('signupError')?.classList.remove('visible');
+    }
+
+    function _setLoading(on) {
+      const btn     = document.getElementById('signupBtn');
+      const spinner = document.getElementById('signupSpinner');
+      const textEl  = document.getElementById('signupBtnText');
+      if (btn)     btn.disabled       = on;
+      if (spinner) spinner.classList.toggle('visible', on);
+      if (textEl)  textEl.textContent = on ? 'Creating account…' : 'Create Account';
+    }
+
+    // ── Signup handler ───────────────────────────────────────
+    async function handleSignup(e) {
+      e.preventDefault();
+      _clearError();
+
+      const name     = document.getElementById('signupName').value.trim();
+      const email    = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value;
+      const confirm  = document.getElementById('signupConfirm').value;
+
+      // Client-side validation
+      if (!name) {
+        _showError('Please enter your name.');
+        document.getElementById('signupName').focus();
+        return;
+      }
+      if (!/^[\p{L}\p{M}\s'\-]{1,40}$/u.test(name)) {
+        _showError('Name can only contain letters, spaces, hyphens, or apostrophes (max 40 chars).');
+        document.getElementById('signupName').focus();
+        return;
+      }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        _showError('Please enter a valid email address.');
+        document.getElementById('signupEmail').focus();
+        return;
+      }
+      if (password.length < 6) {
+        _showError('Password must be at least 6 characters.');
+        document.getElementById('signupPassword').focus();
+        return;
+      }
+      if (password !== confirm) {
+        _showError('Passwords do not match.');
+        document.getElementById('signupConfirm').value = '';
+        document.getElementById('signupConfirm').focus();
+        return;
+      }
+
+      _setLoading(true);
+
+      try {
+        await signUp(name, email, password);
+        // signUp saves session — redirect to app
+        document.getElementById('signupBtnText').textContent = 'Account created! ✓';
+        setTimeout(() => window.location.replace('index.html'), 300);
+      } catch (err) {
+        _setLoading(false);
+        const msg = err.message || 'Could not create account. Please try again.';
+
+        // Email confirmation required — show as info, not error
+        if (msg.toLowerCase().includes('check your email') ||
+            msg.toLowerCase().includes('confirm your')) {
+          _showSuccess(msg);
+        } else {
+          _showError(msg);
+        }
+      }
+    }
+  </script>
+
+</body>
+</html>

@@ -3,43 +3,950 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Nova AI Assistant – Real-time Hinglish Voice AI powered by Groq">
   <title>Nova AI Assistant</title>
   <link rel="stylesheet" href="style.css">
-  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+  <!-- Lottie player — pinned to 2.0.8 for stability -->
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@2.0.8/dist/lottie-player.js"></script>
 </head>
 <body>
-  <div class="container">
-    
-    <h1>🤖 Nova AI Assistant</h1>
-    <p class="subtitle">Real-time Voice AI • Powered by Groq</p>
-    
-    <div class="robot-container">
-      <lottie-player src="AI Robot.json"
-      background="transparent"
-      speed="1"
-      style="width:150px; height:150px;"
-      loop
-      autoplay></lottie-player>
-    </div>
-    
 
-    <div class="chat-box" id="chatBox"></div>
+  <!-- ── App shell ───────────────────────────────────────────── -->
+  <div class="app-shell">
 
-    <div class="input-area">
-      <input type="text" id="userInput" placeholder="Ask anything... (Type or use voice)">
-      <button onclick="sendMessage()">➤ Send</button>
-    </div>
+    <!-- ── Sidebar ──────────────────────────────────────────── -->
+    <aside class="sidebar" id="sidebar" role="complementary" aria-label="Sidebar">
 
-    <div class="btn-group">
-      <button onclick="startVoiceInput()">🎤 Voice Input</button>
-      <button onclick="clearChat()">Clear Chat</button>
-    </div>
+      <!-- Logo -->
+      <div class="sidebar-logo">
+        <div class="logo-mark" aria-hidden="true">
+          <lottie-player
+            src="AI Robot.json"
+            background="transparent"
+            speed="1"
+            loop
+            autoplay
+            id="sidebarRobot">
+          </lottie-player>
+        </div>
+        <div class="logo-text">
+          <span class="logo-name">Nova</span>
+          <span class="logo-tagline">AI Assistant</span>
+        </div>
+      </div>
 
-    <footer>
-      🤖 Nova AI Assistant Built with ❤️ by Saroj Kumar
-    </footer>
+      <!-- New Chat button -->
+      <button class="new-chat-btn" id="newChatBtn" onclick="newChat()" aria-label="Start new chat">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        New Chat
+      </button>
+
+      <!-- Conversation history list — populated by script.js after login -->
+      <nav
+        class="conv-list"
+        id="convList"
+        role="navigation"
+        aria-label="Recent conversations"
+      >
+        <!-- Items injected by renderConversationList() -->
+      </nav>
+
+      <!-- Spacer -->
+      <div class="sidebar-spacer" aria-hidden="true"></div>
+
+      <!-- Status indicator -->
+      <div class="sidebar-status" id="statusBar" role="status" aria-live="polite" aria-atomic="true">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="status-label" id="statusLabel">Connecting…</span>
+      </div>
+
+      <!-- Profile area — avatar is a button that opens the menu -->
+      <div class="sidebar-profile" role="contentinfo">
+
+        <!-- Clicking the whole profile row opens the popup menu -->
+        <button
+          class="profile-trigger"
+          id="profileTrigger"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="profileMenu"
+          aria-label="Open profile menu"
+        >
+          <!-- Avatar (image or initials — filled by script.js) -->
+          <div class="profile-avatar" id="profileAvatar" aria-hidden="true">?</div>
+
+          <div class="profile-info">
+            <span class="profile-name"  id="profileName">Loading…</span>
+            <span class="profile-email" id="profileEmail"></span>
+          </div>
+
+          <!-- Chevron indicator -->
+          <svg class="profile-chevron" width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+
+        <!-- Profile popup menu — toggled by profileTrigger -->
+        <div
+          class="profile-menu"
+          id="profileMenu"
+          role="menu"
+          aria-label="Profile menu"
+          hidden
+        >
+          <!-- Profile info header (name + email) -->
+          <div class="profile-menu-header" aria-hidden="true">
+            <div class="pmh-avatar" id="menuAvatar"></div>
+            <div class="pmh-info">
+              <span class="pmh-name"  id="menuName"></span>
+              <span class="pmh-email" id="menuEmail"></span>
+            </div>
+          </div>
+
+          <div class="profile-menu-divider" role="separator"></div>
+
+          <!-- View Profile -->
+          <button class="profile-menu-item" role="menuitem" id="menuItemProfile">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            Profile
+          </button>
+
+          <!-- Settings -->
+          <button class="profile-menu-item" role="menuitem" id="menuItemSettings">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Settings
+          </button>
+
+          <!-- Appearance / Theme toggle -->
+          <button class="profile-menu-item" role="menuitem" id="menuItemTheme"
+                  aria-label="Toggle light/dark theme">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" aria-hidden="true" id="themeIcon">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1"  x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22"  x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <span id="themeLabel">Light mode</span>
+            <span class="theme-toggle-pill" id="themePill" aria-hidden="true">
+              <span class="theme-toggle-thumb" id="themeThumb"></span>
+            </span>
+          </button>
+
+          <div class="profile-menu-divider" role="separator"></div>
+
+          <!-- Sign out -->
+          <button class="profile-menu-item profile-menu-item--danger"
+                  role="menuitem" id="menuItemLogout">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign out
+          </button>
+        </div>
+
+      </div><!-- /.sidebar-profile -->
+
+    </aside>
+
+    <!-- ── Mobile top bar ────────────────────────────────────── -->
+    <header class="mobile-topbar" role="banner">
+      <button class="hamburger-btn" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Toggle sidebar" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="mobile-title">Nova</span>
+      <div class="mobile-status-dot" id="mobileStatusDot" aria-hidden="true"></div>
+    </header>
+
+    <!-- ── Main content ──────────────────────────────────────── -->
+    <main class="main-content" role="main">
+
+      <!-- Chat messages area -->
+      <section
+        class="chat-area"
+        id="chatBox"
+        role="log"
+        aria-label="Chat messages"
+        aria-live="polite"
+        aria-relevant="additions"
+      >
+
+        <!-- Empty state (shown when chat is empty) -->
+        <div class="empty-state" id="emptyState" aria-label="Welcome screen">
+          <div class="empty-robot" aria-hidden="true">
+            <lottie-player
+              src="AI Robot.json"
+              background="transparent"
+              speed="1"
+              loop
+              autoplay
+              id="mainRobot">
+            </lottie-player>
+          </div>
+          <h1 class="empty-title" id="emptyTitle">Hey, I'm Nova 👋</h1>
+          <p class="empty-subtitle">Real-time AI assistant · Hinglish · Voice · Tools</p>
+
+          <!-- Suggested prompts -->
+          <div class="suggestions-grid" role="list" aria-label="Suggested prompts">
+            <button class="suggestion-chip" role="listitem" onclick="useSuggestion(this)">
+              <span class="chip-icon">☀️</span>
+              <span class="chip-text">Delhi ka weather kya hai?</span>
+            </button>
+            <button class="suggestion-chip" role="listitem" onclick="useSuggestion(this)">
+              <span class="chip-icon">▶️</span>
+              <span class="chip-text">Play Arijit Singh songs on YouTube</span>
+            </button>
+            <button class="suggestion-chip" role="listitem" onclick="useSuggestion(this)">
+              <span class="chip-icon">🌐</span>
+              <span class="chip-text">Open GitHub for me</span>
+            </button>
+            <button class="suggestion-chip" role="listitem" onclick="useSuggestion(this)">
+              <span class="chip-icon">💬</span>
+              <span class="chip-text">Tum kaun ho? Apne baare mein batao.</span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ── Input bar ─────────────────────────────────────────
+           Layout: [Image] [textarea] [Voice] [Send]
+           Image button opens file picker for vision queries.
+           Voice button wired to toggleVoiceInput() (same as before).
+      ─────────────────────────────────────────────────────────── -->
+      <div class="input-dock">
+
+        <!-- File preview strip — hidden until a file is selected -->
+        <div class="image-preview-bar" id="filePreviewBar" aria-live="polite" aria-label="Selected file preview" hidden>
+          <div class="image-preview-wrap">
+            <!-- Image thumbnail (shown for images) -->
+            <img class="image-preview-thumb" id="filePreviewThumb" src="" alt="Selected image preview" hidden>
+            <!-- Document icon (shown for PDF / TXT) -->
+            <div class="file-preview-doc-icon" id="filePreviewDocIcon" aria-hidden="true" hidden>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+            </div>
+            <button
+              class="image-preview-remove"
+              id="filePreviewRemove"
+              onclick="removeSelectedFile()"
+              aria-label="Remove selected file"
+              title="Remove file"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <span class="image-preview-label" id="filePreviewLabel">File ready to send</span>
+        </div>
+
+        <div class="input-bar" id="inputBar">
+
+          <!-- Image / attach button — triggers hidden file input -->
+          <button
+            class="input-action-btn"
+            id="attachBtn"
+            onclick="triggerFilePicker()"
+            aria-label="Attach file"
+            title="Attach file (JPG/PNG/WEBP image, PDF or TXT — max 4 MB images / 2 MB documents)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+
+          <!-- Hidden file input — images, PDF, TXT -->
+          <input
+            type="file"
+            id="fileInput"
+            accept="image/jpeg,image/png,image/webp,application/pdf,text/plain"
+            style="display:none"
+            onchange="handleFileSelected(event)"
+            aria-hidden="true"
+          >
+
+          <!-- Text input -->
+          <label for="userInput" class="sr-only">Type your message</label>
+          <textarea
+            id="userInput"
+            rows="1"
+            placeholder="Message Nova…"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="sentences"
+            spellcheck="false"
+            aria-label="Message input"
+            oninput="autoResizeTextarea(this)"
+            onkeydown="handleInputKeydown(event)"
+          ></textarea>
+
+          <!-- Voice button — preserves existing id and onclick -->
+          <button
+            id="voiceBtn"
+            class="input-action-btn voice-action-btn"
+            onclick="toggleVoiceInput()"
+            aria-label="Start voice input"
+            aria-pressed="false"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+
+          <!-- Send button -->
+          <button id="sendBtn" class="send-btn" onclick="sendMessage()" aria-label="Send message">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+
+        </div>
+        <p class="input-hint">Nova can make mistakes. Voice works best in Chrome/Edge. Images: JPG/PNG/WEBP max 4 MB · Docs: PDF/TXT max 2 MB.</p>
+      </div>
+
+    </main>
+
   </div>
 
+  <!-- ── Sidebar overlay (mobile) ─────────────────────────────── -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()" aria-hidden="true"></div>
+
+  <!-- ── Name prompt modal ────────────────────────────────────────
+       Shown once after first login when no display name is set.
+       Uses native <dialog> for focus-trap + Escape key dismissal.
+  ─────────────────────────────────────────────────────────────── -->
+  <dialog
+    id="nameModal"
+    class="name-modal"
+    aria-modal="true"
+    aria-labelledby="nameModalTitle"
+  >
+    <div class="name-modal-inner">
+
+      <!-- Nova avatar -->
+      <div class="name-modal-avatar" aria-hidden="true">N</div>
+
+      <h2 class="name-modal-title" id="nameModalTitle">
+        What should I call you?
+      </h2>
+      <p class="name-modal-sub">
+        I'll use your name to personalise our conversations.
+        You can change it any time from your profile.
+      </p>
+
+      <!-- Input -->
+      <label class="sr-only" for="nameModalInput">Your name</label>
+      <input
+        type="text"
+        id="nameModalInput"
+        class="name-modal-input"
+        placeholder="Enter your name…"
+        maxlength="40"
+        autocomplete="given-name"
+        spellcheck="false"
+        aria-required="true"
+        aria-describedby="nameModalError"
+      >
+
+      <!-- Inline error -->
+      <div
+        id="nameModalError"
+        class="name-modal-error"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      ></div>
+
+      <!-- Actions -->
+      <div class="name-modal-actions">
+        <button
+          class="name-modal-btn name-modal-btn--primary"
+          id="nameModalSaveBtn"
+          onclick="handleNameSave()"
+          aria-label="Save name and continue"
+        >
+          <span class="name-modal-spinner" id="nameModalSpinner" aria-hidden="true"></span>
+          <span id="nameModalSaveTxt">Let's go →</span>
+        </button>
+        <button
+          class="name-modal-btn name-modal-btn--ghost"
+          id="nameModalSkipBtn"
+          onclick="handleNameSkip()"
+          aria-label="Skip for now"
+        >
+          Skip for now
+        </button>
+      </div>
+
+    </div>
+  </dialog>
+
+  <style>
+    /* ── Name modal ───────────────────────────────────────────── */
+    .name-modal {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      background: rgba(7, 7, 12, 0.75);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: none;
+      padding: 0;
+      margin: 0;
+      display: none; /* overridden by [open] */
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .name-modal[open] {
+      display: flex;
+    }
+
+    .name-modal-inner {
+      background: #1a1a28;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px;
+      padding: 36px 32px 28px;
+      width: min(400px, calc(100vw - 32px));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px rgba(124,110,248,0.06);
+      animation: nmSlideUp 0.26s cubic-bezier(0.22,1,0.36,1) both;
+    }
+
+    @keyframes nmSlideUp {
+      from { opacity: 0; transform: translateY(20px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0)    scale(1); }
+    }
+
+    .name-modal-avatar {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: rgba(124,110,248,0.15);
+      border: 2px solid rgba(124,110,248,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; font-weight: 700; color: #a78bfa;
+      margin-bottom: 18px;
+      flex-shrink: 0;
+    }
+
+    .name-modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #e8e8f0;
+      text-align: center;
+      letter-spacing: -0.3px;
+      margin-bottom: 8px;
+    }
+
+    .name-modal-sub {
+      font-size: 0.83rem;
+      color: #8e8ea8;
+      text-align: center;
+      line-height: 1.55;
+      max-width: 280px;
+      margin-bottom: 22px;
+    }
+
+    .name-modal-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: #13131e;
+      color: #e8e8f0;
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .name-modal-input::placeholder { color: #52526a; }
+
+    .name-modal-input:focus {
+      border-color: rgba(124,110,248,0.55);
+      box-shadow: 0 0 0 3px rgba(124,110,248,0.18);
+    }
+
+    .name-modal-input.nm-error {
+      border-color: rgba(239,68,68,0.4);
+      box-shadow: 0 0 0 3px rgba(239,68,68,0.10);
+    }
+
+    .name-modal-error {
+      display: none;
+      width: 100%;
+      margin-top: 7px;
+      padding: 8px 12px;
+      background: rgba(239,68,68,0.10);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 8px;
+      color: #fca5a5;
+      font-size: 0.81rem;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .name-modal-error.visible { display: block; }
+
+    .name-modal-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      margin-top: 18px;
+    }
+
+    .name-modal-btn {
+      width: 100%;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 0.93rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s ease, opacity 0.15s ease, transform 0.12s ease;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      border: none;
+    }
+
+    .name-modal-btn--primary {
+      background: #7c6ef8;
+      color: #fff;
+    }
+
+    .name-modal-btn--primary:hover:not(:disabled) { background: #6a5de8; }
+    .name-modal-btn--primary:active:not(:disabled) { transform: scale(0.98); }
+    .name-modal-btn--primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .name-modal-btn--ghost {
+      background: transparent;
+      color: #8e8ea8;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .name-modal-btn--ghost:hover { color: #a78bfa; border-color: rgba(124,110,248,0.3); }
+
+    /* Spinner inside primary button */
+    .name-modal-spinner {
+      display: none;
+      width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: nmSpin 0.65s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .name-modal-spinner.visible { display: block; }
+    @keyframes nmSpin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 480px) {
+      .name-modal-inner { padding: 28px 20px 22px; }
+      .name-modal-title { font-size: 1.1rem; }
+    }
+  </style>
+
+  <!-- ── Confirmation modal ──────────────────────────────────────
+       Shown when a tool has requires_confirmation=true.
+       Uses the native <dialog> element for accessibility.
+  ───────────────────────────────────────────────────────────── -->
+  <dialog id="confirmModal" class="confirm-modal" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="confirm-modal-inner">
+      <div class="confirm-icon" id="confirmIcon" aria-hidden="true">🌐</div>
+      <h2 class="confirm-title" id="confirmTitle">Kya aap sure hain?</h2>
+      <p class="confirm-body" id="confirmBody">Yeh action perform ki jayegi.</p>
+      <div class="confirm-detail" id="confirmDetail"></div>
+      <div class="confirm-actions">
+        <button class="btn btn-confirm-yes" id="confirmYesBtn">✅ Haan, karo</button>
+        <button class="btn btn-confirm-no"  id="confirmNoBtn">❌ Nahi</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ── Profile modal ────────────────────────────────────────────
+       Opened from "Profile" item in the profile menu.
+       Uses the native <dialog> element for accessibility + focus trap.
+  ─────────────────────────────────────────────────────────────── -->
+  <dialog id="profileModal" class="profile-modal" aria-modal="true" aria-labelledby="profileModalTitle">
+    <div class="profile-modal-inner">
+
+      <!-- Close button -->
+      <button class="profile-modal-close" id="profileModalClose" aria-label="Close profile">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- Avatar large -->
+      <div class="profile-modal-avatar" id="profileModalAvatar" aria-hidden="true"></div>
+
+      <!-- Name + email -->
+      <h2 class="profile-modal-name"  id="profileModalTitle">User</h2>
+      <p  class="profile-modal-email" id="profileModalEmail"></p>
+
+      <div class="profile-modal-divider" role="separator"></div>
+
+      <!-- Info rows -->
+      <div class="profile-modal-rows">
+        <div class="profile-modal-row">
+          <span class="pmr-label">Account</span>
+          <span class="pmr-value">Email</span>
+        </div>
+        <div class="profile-modal-row">
+          <span class="pmr-label">Theme</span>
+          <span class="pmr-value" id="profileModalTheme">Dark</span>
+        </div>
+      </div>
+
+      <div class="profile-modal-divider" role="separator"></div>
+
+      <!-- Sign out button -->
+      <button class="profile-modal-logout" id="profileModalLogout">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign out
+      </button>
+
+    </div>
+  </dialog>
+
+  <!-- Visually-hidden utility class (for screen readers) -->
+  <style>
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+
+  <!-- ── Settings modal ──────────────────────────────────────────
+       Opened from the "Settings" item in the profile menu.
+       Two sections: Profile and AI Settings.
+  ─────────────────────────────────────────────────────────────── -->
+  <dialog id="settingsModal" class="settings-modal" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="settings-modal-inner">
+
+      <!-- Header -->
+      <div class="settings-header">
+        <h2 class="settings-title" id="settingsModalTitle">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          Settings
+        </h2>
+        <button class="settings-close-btn" id="settingsCloseBtn" aria-label="Close settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="settings-body">
+
+        <!-- ── Section 1: Profile ───────────────────────────── -->
+        <section class="settings-section" aria-labelledby="settingsProfileHeading">
+          <h3 class="settings-section-title" id="settingsProfileHeading">Profile</h3>
+
+          <div class="settings-profile-card">
+            <div class="settings-profile-avatar" id="settingsAvatar" aria-hidden="true">?</div>
+            <div class="settings-profile-info">
+              <span class="settings-profile-name"  id="settingsName">Loading…</span>
+              <span class="settings-profile-email" id="settingsEmail"></span>
+            </div>
+          </div>
+
+          <button class="settings-logout-btn" id="settingsLogoutBtn" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign out
+          </button>
+        </section>
+
+        <div class="settings-divider" role="separator"></div>
+
+        <!-- ── Section 2: AI Settings ──────────────────────── -->
+        <section class="settings-section" aria-labelledby="settingsAIHeading">
+          <h3 class="settings-section-title" id="settingsAIHeading">AI Settings</h3>
+
+          <!-- Language -->
+          <div class="settings-row" id="settingsRowLanguage">
+            <div class="settings-row-label">
+              <span class="settings-row-name">Language</span>
+              <span class="settings-row-desc">Nova's response language</span>
+            </div>
+            <div class="settings-segmented" role="group" aria-label="Language preference">
+              <button class="seg-btn" data-pref="language" data-val="hindi"    type="button">Hindi</button>
+              <button class="seg-btn" data-pref="language" data-val="hinglish" type="button">Hinglish</button>
+              <button class="seg-btn" data-pref="language" data-val="english"  type="button">English</button>
+            </div>
+          </div>
+
+          <!-- Voice input on/off -->
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span class="settings-row-name">Voice Input</span>
+              <span class="settings-row-desc">Enable the mic button for voice messages</span>
+            </div>
+            <button
+              class="settings-toggle-btn"
+              id="toggleVoiceEnabled"
+              role="switch"
+              aria-checked="true"
+              data-pref="voice_enabled"
+              type="button"
+              aria-label="Toggle voice input"
+            >
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </button>
+          </div>
+
+          <!-- Auto-speak -->
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span class="settings-row-name">Auto-speak</span>
+              <span class="settings-row-desc">Read Nova's replies aloud automatically</span>
+            </div>
+            <button
+              class="settings-toggle-btn"
+              id="toggleAutoSpeak"
+              role="switch"
+              aria-checked="true"
+              data-pref="auto_speak"
+              type="button"
+              aria-label="Toggle auto-speak"
+            >
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </button>
+          </div>
+
+          <!-- Response style -->
+          <div class="settings-row" id="settingsRowStyle">
+            <div class="settings-row-label">
+              <span class="settings-row-name">Response Style</span>
+              <span class="settings-row-desc">How much detail Nova includes</span>
+            </div>
+            <div class="settings-segmented" role="group" aria-label="Response style preference">
+              <button class="seg-btn" data-pref="response_style" data-val="short"    type="button">Short</button>
+              <button class="seg-btn" data-pref="response_style" data-val="normal"   type="button">Normal</button>
+              <button class="seg-btn" data-pref="response_style" data-val="detailed" type="button">Detailed</button>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="settings-divider" role="separator"></div>
+
+        <!-- ── Section 3: Privacy ─────────────────────────── -->
+        <section class="settings-section" aria-labelledby="settingsPrivacyHeading">
+          <h3 class="settings-section-title" id="settingsPrivacyHeading">Privacy</h3>
+
+          <!-- Memories subsection -->
+          <div class="privacy-group" id="privacyMemoriesGroup">
+            <div class="privacy-group-header">
+              <div class="privacy-group-label">
+                <span class="privacy-group-name">Nova's Memory</span>
+                <span class="privacy-group-desc" id="privacyMemoriesDesc">Loading…</span>
+              </div>
+              <button class="privacy-action-btn privacy-action-btn--secondary" id="privacyToggleMemoriesBtn" type="button" hidden>Show</button>
+            </div>
+            <div class="privacy-memory-list" id="privacyMemoryList" hidden></div>
+            <button class="privacy-action-btn privacy-action-btn--danger" id="privacyClearMemoriesBtn" type="button" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              Clear all memories
+            </button>
+          </div>
+
+          <div class="privacy-row-divider"></div>
+
+          <!-- Conversations subsection -->
+          <div class="privacy-group">
+            <div class="privacy-group-header">
+              <div class="privacy-group-label">
+                <span class="privacy-group-name">Chat History</span>
+                <span class="privacy-group-desc">All stored conversations and messages</span>
+              </div>
+            </div>
+            <button class="privacy-action-btn privacy-action-btn--danger" id="privacyClearConvsBtn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              Clear all conversations
+            </button>
+          </div>
+
+          <div class="privacy-row-divider"></div>
+
+          <!-- Delete account subsection -->
+          <div class="privacy-group">
+            <div class="privacy-group-header">
+              <div class="privacy-group-label">
+                <span class="privacy-group-name">Delete Account</span>
+                <span class="privacy-group-desc">Permanently delete your account and all data</span>
+              </div>
+            </div>
+            <button class="privacy-action-btn privacy-action-btn--danger-outline" id="privacyShowDeleteBtn" type="button">Delete my account…</button>
+
+            <!-- Step 2: typed confirmation panel (hidden until Show Delete clicked) -->
+            <div class="privacy-delete-confirm" id="privacyDeleteConfirm" hidden>
+              <p class="privacy-delete-warning">
+                ⚠️ This permanently deletes your account, memories, and all conversations.
+                This action <strong>cannot be undone</strong>.
+              </p>
+              <label class="privacy-delete-label" for="privacyDeleteInput">
+                Type <strong>DELETE</strong> to confirm:
+              </label>
+              <input
+                type="text"
+                id="privacyDeleteInput"
+                class="privacy-delete-input"
+                placeholder="DELETE"
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby="privacyDeleteHint"
+              >
+              <p class="privacy-delete-hint" id="privacyDeleteHint" aria-live="polite"></p>
+              <div class="privacy-delete-actions">
+                <button class="privacy-action-btn privacy-action-btn--danger" id="privacyConfirmDeleteBtn" type="button" disabled>
+                  <span class="privacy-delete-spinner" id="privacyDeleteSpinner" aria-hidden="true"></span>
+                  <span id="privacyDeleteBtnTxt">Delete account permanently</span>
+                </button>
+                <button class="privacy-action-btn privacy-action-btn--ghost" id="privacyCancelDeleteBtn" type="button">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="settings-divider" role="separator"></div>
+
+        <!-- ── Section 4: Connected Devices ──────────────────── -->
+        <section class="settings-section" aria-labelledby="settingsDevicesHeading">
+          <h3 class="settings-section-title" id="settingsDevicesHeading">Connected Devices</h3>
+
+          <!-- Loading state -->
+          <div class="device-loading" id="deviceLoading" aria-live="polite">
+            <span class="device-loading-dot"></span>
+            <span class="device-loading-dot"></span>
+            <span class="device-loading-dot"></span>
+          </div>
+
+          <!-- Empty state: no device ever registered -->
+          <div class="device-empty-state" id="deviceEmptyState" hidden>
+            <div class="device-empty-icon" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                <line x1="12" y1="18" x2="12.01" y2="18"/>
+              </svg>
+            </div>
+            <p class="device-empty-title">No device linked</p>
+            <p class="device-empty-desc">Install the Nova Companion app on your Android phone and follow the setup guide to link it.</p>
+          </div>
+
+          <!-- Device cards (populated by JS) -->
+          <ul class="device-list" id="deviceList" hidden aria-label="Linked devices"></ul>
+
+          <!-- Error state -->
+          <p class="device-error" id="deviceError" hidden role="alert"></p>
+
+        </section>
+
+      </div><!-- /.settings-body -->
+      <div class="settings-footer">
+        <button class="settings-save-btn" id="settingsSaveBtn" type="button">
+          <span class="settings-save-spinner" id="settingsSaveSpinner" aria-hidden="true"></span>
+          <span id="settingsSaveTxt">Save preferences</span>
+        </button>
+      </div>
+
+    </div><!-- /.settings-modal-inner -->
+  </dialog>
+
+  <!-- config.js must load before script.js — sets window.API_BASE_URL -->
+  <script src="config.js"></script>
+  <!-- auth.js must load before script.js — session management -->
+  <script src="auth.js"></script>
+  <!-- prefs.js — per-user AI/UX preference store -->
+  <script src="prefs.js"></script>
+  <!-- Session guard: redirect to login if not authenticated -->
+  <script>
+    'use strict';
+    requireAuth();
+
+    // Personalize the welcome title immediately (before script.js paint)
+    (function _personalizeWelcome() {
+      try {
+        const session = getSession();
+        const meta    = session?.user;
+        const name    = meta?.display_name || meta?.full_name || null;
+        if (name && !name.includes('@')) {
+          const firstName = name.trim().split(/\s+/)[0];
+          const el = document.getElementById('emptyTitle');
+          if (el) el.textContent = `Hey, ${firstName} 👋`;
+        }
+      } catch (e) { /* non-fatal */ }
+    })();
+
+    // Pre-populate sidebar profile area to avoid "Loading…" flash
+    (function _prefillProfile() {
+      try {
+        const session = getSession();
+        const user    = session?.user;
+        if (!user) return;
+
+        const displayName = user.display_name || user.full_name || user.email || 'User';
+        const initial     = displayName.charAt(0).toUpperCase();
+
+        const avatarEl = document.getElementById('profileAvatar');
+        const nameEl   = document.getElementById('profileName');
+        const emailEl  = document.getElementById('profileEmail');
+
+        if (avatarEl) avatarEl.textContent = initial;
+        if (nameEl)   nameEl.textContent   = displayName;
+        if (emailEl)  emailEl.textContent  = user.email || '';
+      } catch (e) { /* non-fatal */ }
+    })();
+  </script>
   <script src="script.js"></script>
 </body>
 </html>

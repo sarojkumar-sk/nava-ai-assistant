@@ -1,4 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
 venv/
-backend/__pycache__/
+.venv/
+env/
+.env/
+
+# Environment / secrets — NEVER commit these
 backend/.env
-*.pyc
+.env
+*.env
+*.secret
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+
+# Build artifacts
+*.egg-info/
+dist/
+build/

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Nova AI Assistant — Sign in to your account">
+  <title>Nova — Log In</title>
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@2.0.8/dist/lottie-player.js"></script>
+  <style>
+    /* ── Design tokens ───────────────────────────────────────── */
+    :root {
+      --accent:         #7c6ef8;
+      --accent-hover:   #6a5de8;
+      --accent-2:       #a78bfa;
+      --accent-glow:    rgba(124, 110, 248, 0.28);
+      --accent-subtle:  rgba(124, 110, 248, 0.10);
+      --bg-base:        #0d0d14;
+      --bg-card:        #13131e;
+      --bg-input:       #1a1a28;
+      --border-subtle:  rgba(255, 255, 255, 0.05);
+      --border-medium:  rgba(255, 255, 255, 0.09);
+      --border-focus:   rgba(124, 110, 248, 0.55);
+      --text-primary:   #e8e8f0;
+      --text-secondary: #8e8ea8;
+      --text-muted:     #52526a;
+      --error-bg:       rgba(239, 68, 68, 0.10);
+      --error-border:   rgba(239, 68, 68, 0.28);
+      --error-text:     #fca5a5;
+      --r-sm:           8px;
+      --r-md:           14px;
+      --r-lg:           22px;
+      --r-full:         9999px;
+      --t-fast:         0.15s ease;
+      --t-med:          0.25s ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    /* ── Page ─────────────────────────────────────────────────── */
+    html, body {
+      min-height: 100%;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -100px; left: 50%;
+      transform: translateX(-50%);
+      width: 700px; height: 700px;
+      background: radial-gradient(ellipse at center,
+        rgba(124,110,248,0.07) 0%, transparent 68%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Card ─────────────────────────────────────────────────── */
+    .auth-card {
+      position: relative;
+      z-index: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--r-lg);
+      padding: 40px 36px 36px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.45),
+                  0 0 0 1px rgba(124,110,248,0.06);
+    }
+
+    /* ── Robot avatar ─────────────────────────────────────────── */
+    .auth-avatar {
+      width: 68px;
+      height: 68px;
+      margin: 0 auto 18px;
+      display: block;
+    }
+
+    /* ── Heading ──────────────────────────────────────────────── */
+    .auth-title {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text-primary);
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .auth-subtitle {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    /* ── Form elements ────────────────────────────────────────── */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .field-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 11px 14px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: var(--bg-input);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--r-sm);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color var(--t-fast), box-shadow var(--t-fast);
+      -webkit-appearance: none;
+    }
+
+    .text-input::placeholder { color: var(--text-muted); }
+
+    .text-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(124,110,248,0.12);
+    }
+
+    /* ── Password wrapper ─────────────────────────────────────── */
+    .pw-wrap { position: relative; }
+    .pw-wrap .text-input { padding-right: 44px; }
+
+    .pw-toggle {
+      position: absolute;
+      right: 12px; top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color var(--t-fast);
+    }
+
+    .pw-toggle:hover { color: var(--text-secondary); }
+
+    /* ── Error banner ─────────────────────────────────────────── */
+    .form-error {
+      font-size: 0.82rem;
+      color: var(--error-text);
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      border-radius: var(--r-sm);
+      padding: 9px 12px;
+      line-height: 1.5;
+      display: none;
+      margin-bottom: 14px;
+    }
+
+    .form-error.visible { display: block; }
+
+    /* ── Primary button ───────────────────────────────────────── */
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      margin-top: 4px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--r-md);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+      letter-spacing: 0.2px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      box-shadow: 0 4px 18px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+    .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Spinner inside button */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    .spinner.visible { display: block; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Switch link ──────────────────────────────────────────── */
+    .switch-row {
+      margin-top: 22px;
+      text-align: center;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+    }
+
+    .switch-row a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      margin-left: 4px;
+      transition: color var(--t-fast);
+    }
+
+    .switch-row a:hover { color: var(--accent-2); text-decoration: underline; }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .auth-card { padding: 32px 20px 28px; }
+      .auth-title { font-size: 1.35rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="auth-card" role="main" aria-label="Sign in to Nova">
+
+    <!-- Robot avatar -->
+    <div class="auth-avatar" aria-hidden="true">
+      <lottie-player
+        src="AI Robot.json"
+        background="transparent"
+        speed="1"
+        loop autoplay>
+      </lottie-player>
+    </div>
+
+    <h1 class="auth-title">Welcome back</h1>
+    <p  class="auth-subtitle">Sign in to continue to Nova</p>
+
+    <!-- Error banner -->
+    <div class="form-error" id="loginError" role="alert" aria-live="assertive"></div>
+
+    <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+
+      <div class="field">
+        <label class="field-label" for="loginEmail">Email</label>
+        <input
+          type="email"
+          id="loginEmail"
+          class="text-input"
+          placeholder="you@example.com"
+          autocomplete="email"
+          inputmode="email"
+          spellcheck="false"
+          autocapitalize="none"
+          required
+          aria-required="true"
+          autofocus
+        >
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="loginPassword">Password</label>
+        <div class="pw-wrap">
+          <input
+            type="password"
+            id="loginPassword"
+            class="text-input"
+            placeholder="Your password"
+            autocomplete="current-password"
+            required
+            aria-required="true"
+          >
+          <button type="button" class="pw-toggle"
+                  onclick="togglePw('loginPassword', this)"
+                  aria-label="Show password">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary" id="loginBtn">
+        <span class="spinner" id="loginSpinner" aria-hidden="true"></span>
+        <span id="loginBtnText">Log In</span>
+      </button>
+
+    </form>
+
+    <div class="switch-row">
+      Don't have an account?
+      <a href="signup.html">Create Account</a>
+    </div>
+
+  </div><!-- /.auth-card -->
+
+  <!-- config.js sets SUPABASE_URL and SUPABASE_ANON_KEY -->
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    'use strict';
+
+    // Skip login if already authenticated
+    if (isLoggedIn()) {
+      window.location.replace('index.html');
+    }
+
+    // ── Password show/hide toggle ────────────────────────────
+    function togglePw(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.querySelector('svg').innerHTML = show
+        ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8
+              a18.45 18.45 0 0 1 5.06-5.94"/>
+           <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8
+              a18.5 18.5 0 0 1-2.16 3.19"/>
+           <line x1="1" y1="1" x2="23" y2="23"/>`
+        : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+           <circle cx="12" cy="12" r="3"/>`;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────
+    function _showError(msg) {
+      const el = document.getElementById('loginError');
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.add('visible');
+    }
+
+    function _clearError() {
+      const el = document.getElementById('loginError');
+      if (!el) return;
+      el.textContent = '';
+      el.classList.remove('visible');
+    }
+
+    function _setLoading(on) {
+      const btn     = document.getElementById('loginBtn');
+      const spinner = document.getElementById('loginSpinner');
+      const textEl  = document.getElementById('loginBtnText');
+      if (btn)     btn.disabled       = on;
+      if (spinner) spinner.classList.toggle('visible', on);
+      if (textEl)  textEl.textContent = on ? 'Logging in…' : 'Log In';
+    }
+
+    // ── Login handler ────────────────────────────────────────
+    async function handleLogin(e) {
+      e.preventDefault();
+      _clearError();
+
+      const email    = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      _setLoading(true);
+
+      try {
+        await signIn(email, password);
+        // Success — brief confirmation then redirect to app
+        document.getElementById('loginBtnText').textContent = 'Logged in! ✓';
+        setTimeout(() => window.location.replace('index.html'), 300);
+      } catch (err) {
+        _setLoading(false);
+        _showError(err.message || 'Login failed. Please try again.');
+        document.getElementById('loginPassword').value = '';
+        document.getElementById('loginPassword').focus();
+      }
+    }
+  </script>
+
+</body>
+</html>
