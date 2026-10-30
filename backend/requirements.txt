@@ -32,6 +32,8 @@ h2==4.3.0
 hpack==4.2.0
 hyperframe==6.1.0
 
+python-multipart
+
 # ── Environment / config ────────────────────────────────────────────────────
 python-dotenv==1.2.2
 
