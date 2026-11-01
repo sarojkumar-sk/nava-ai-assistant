@@ -172,19 +172,28 @@ def save_message(
     conversation_id: str,
     role: str,
     content: str,
-    tool_intent: Optional[str] = None,
+    user_id: Optional[str] = None,
+    tool_intent: Optional[str] = None,   # kept for caller compat; not stored (column removed)
 ) -> Optional[str]:
     """
     Insert a message into the messages table.
 
     role must be 'user' or 'bot'.
-    Ownership is enforced by the RLS policy on messages
-    (the conversation must belong to auth.uid()).
+    user_id is required by the live schema (NOT NULL column).
+    If user_id is not provided, the insert will fail with a DB constraint error.
 
     Returns the new message UUID, or None if unavailable/failed.
     """
     if role not in ("user", "bot", "system"):
         logger.warning("save_message: invalid role %r, skipping", role)
+        return None
+
+    if not user_id:
+        logger.warning(
+            "save_message: user_id is required but was not provided "
+            "(conv=%s role=%s). Message will not be persisted.",
+            conversation_id[:8], role,
+        )
         return None
 
     db = get_db()
@@ -193,15 +202,28 @@ def save_message(
 
     row: dict = {
         "conversation_id": conversation_id,
+        "user_id":         user_id,
         "role":            role,
         "content":         content[:MAX_CONTENT_LENGTH],
     }
-    if tool_intent:
-        row["tool_intent"] = tool_intent[:64]
+    # tool_intent column no longer exists in the live schema; omit it.
+    # The parameter is kept for backward-compatibility with call sites.
 
     try:
         resp = db.table("messages").insert(row).execute()
-        msg_id = resp.data[0]["id"] if resp.data else None
+        if not resp.data:
+            # Empty data after INSERT usually means RLS blocked the row.
+            # Either run schema_v4.sql in Supabase, or switch to the
+            # service-role key (SUPABASE_SERVICE_KEY in .env).
+            logger.warning(
+                "save_message: INSERT returned no data for conv=%s role=%s — "
+                "likely blocked by Supabase RLS. "
+                "Fix: run backend/schema_v4.sql in Supabase SQL Editor, "
+                "or set SUPABASE_SERVICE_KEY in backend/.env.",
+                conversation_id[:8], role,
+            )
+            return None
+        msg_id = resp.data[0]["id"]
         logger.debug("Saved message: role=%s conv=%s id=%s", role, conversation_id[:8], msg_id)
         return msg_id
     except Exception as e:
@@ -238,7 +260,7 @@ def get_history(
     try:
         resp = (
             db.table("messages")
-            .select("id, role, content, tool_intent, created_at")
+            .select("id, role, content, created_at")
             .eq("conversation_id", conversation_id)
             .order("created_at", desc=False)
             .limit(limit)

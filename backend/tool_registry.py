@@ -115,7 +115,23 @@ Honesty rules:
 - NEVER claim a WhatsApp message was sent. Nova only opens WhatsApp with a pre-filled draft — the user must press Send.
 - NEVER claim a call was placed. Nova only opens a call prompt — the user must confirm.
 - NEVER claim an email was sent. Nova only opens the email client with a pre-filled draft — the user must press Send.
-- Always say something like "WhatsApp khul jayega, aapko Send karna hoga" in your final reply."""
+- Always say something like "WhatsApp khul jayega, aapko Send karna hoga" in your final reply.
+
+CONVERSATION MEMORY — answering questions about what was shared:
+When the user asks anything like:
+  "is chat mein maine kya share kiya", "tune kya yaad rakha", "maine kya bataya",
+  "what did I tell you", "mujhe yaad dilao", "aaj humne kya baat ki",
+  "is conversation mein kya hua", "kya kya discuss kiya"
+DO THIS:
+1. Read the entire conversation history above (all user and assistant messages in this session).
+2. List every fact, number, name, preference, or request the user mentioned — even ones shared
+   several messages ago.
+3. Include tool actions: if the user asked to send WhatsApp to a number, say "Aapne mujhe
+   919876543210 pe WhatsApp bhejne ko kaha" — use the actual number/email/name from history.
+4. Be specific. Do NOT say "kuch share nahi kiya" or "mujhe koi details nahi mili" unless the
+   conversation history is genuinely empty.
+5. Format as a short bullet list if there are multiple items.
+6. Reply in the same language/style the user has been using (Hinglish by default)."""
 
 
 # ============================================================================

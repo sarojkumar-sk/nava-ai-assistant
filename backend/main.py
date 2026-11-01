@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import time
+import uuid as _uuid_mod
 from collections import defaultdict
 from typing import ClassVar, Optional
 from urllib.parse import quote_plus
@@ -199,6 +200,58 @@ async def rate_limit_middleware(request: Request, call_next):
             content={"detail": "Too many requests. Thodi der baad try karo."},
         )
     return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# In-memory conversation buffer
+# ---------------------------------------------------------------------------
+# Used for two purposes:
+#   1. Anonymous users (no Supabase user_id) — sole source of per-session
+#      context. The frontend receives a generated conversation_id on the first
+#      message and re-sends it on subsequent turns.
+#   2. Fast cache for authenticated users — the most recent turns are kept
+#      here so tool-param reuse (phone number, message text, etc.) works
+#      even if the Supabase call is slow or momentarily fails.
+#
+# Structure:
+#   _mem_conv[conv_id] = {
+#       "messages": [{"role": "user"|"assistant", "content": "..."}],
+#       "ts": float,   # time.time() of last update
+#   }
+#
+# Eviction: conversations not touched for more than MEM_CONV_TTL_S are
+# removed lazily (on every new /chat request).
+_mem_conv: dict[str, dict] = {}
+MEM_CONV_TTL_S    = int(os.getenv("MEM_CONV_TTL_S",   str(4 * 3600)))  # 4 hours default
+MEM_CONV_MAX_MSGS = int(os.getenv("MEM_CONV_MAX_MSGS", "40"))           # cap per conversation (20 turns)
+
+
+def _mem_get_history(conv_id: str) -> list[dict]:
+    """Return the in-memory message list for conv_id (oldest first), or []."""
+    entry = _mem_conv.get(conv_id)
+    if not entry:
+        return []
+    return list(entry["messages"])
+
+
+def _mem_append(conv_id: str, role: str, content: str) -> None:
+    """Append one message to the in-memory buffer, capping at MEM_CONV_MAX_MSGS."""
+    if not content or not content.strip():
+        return
+    entry = _mem_conv.setdefault(conv_id, {"messages": [], "ts": 0.0})
+    entry["messages"].append({"role": role, "content": content.strip()})
+    # Keep only the most recent N messages (sliding window)
+    if len(entry["messages"]) > MEM_CONV_MAX_MSGS:
+        entry["messages"] = entry["messages"][-MEM_CONV_MAX_MSGS:]
+    entry["ts"] = time.time()
+
+
+def _mem_evict_stale() -> None:
+    """Remove conversations not updated within TTL.  Called once per /chat request."""
+    cutoff = time.time() - MEM_CONV_TTL_S
+    stale = [cid for cid, e in _mem_conv.items() if e["ts"] < cutoff]
+    for cid in stale:
+        del _mem_conv[cid]
 
 
 # ---------------------------------------------------------------------------
@@ -760,6 +813,89 @@ def _finalize_agent_response(
     return {"type": "message", "response": final_text, "agent_steps": agent_steps}
 
 
+# ---------------------------------------------------------------------------
+# Tool summary builder
+# ---------------------------------------------------------------------------
+def _tool_summary(intent: str, params: dict) -> str:
+    """Build a human-readable one-liner describing what a tool did.
+
+    This is stored in the in-memory conversation buffer (and Supabase) as
+    the assistant's turn when no natural-language reply was produced.
+    The text uses first-person so it reads naturally in conversation history,
+    and crucially it includes the actual parameters (phone number, message,
+    email address, etc.) so future "kya share kiya" queries can see them.
+    """
+    if intent == "WHATSAPP_MESSAGE":
+        num = params.get("phone_number", "?")
+        msg = params.get("message", "")
+        if msg:
+            return f"Maine WhatsApp draft banaya: number {num} ko message '{msg}'."
+        return f"Maine WhatsApp draft banaya: number {num} ke liye."
+
+    if intent == "PHONE_CALL":
+        num = params.get("phone_number", "?")
+        return f"Maine call initiate kiya: number {num}."
+
+    if intent == "SEND_EMAIL":
+        to  = params.get("to", "?")
+        sub = params.get("subject", "")
+        bdy = params.get("body", "")
+        parts = [f"Maine email draft banaya: {to} ko"]
+        if sub:
+            parts.append(f"subject '{sub}'")
+        if bdy:
+            parts.append(f"body '{bdy[:120]}{'…' if len(bdy)>120 else ''}'")
+        return ", ".join(parts) + "."
+
+    if intent in ("PLAY_YOUTUBE", "SEARCH_YOUTUBE"):
+        q = params.get("query", "?")
+        verb = "play kiya" if intent == "PLAY_YOUTUBE" else "search kiya"
+        return f"Maine YouTube pe '{q}' {verb}."
+
+    if intent == "OPEN_WEBSITE":
+        url = params.get("url", "?")
+        return f"Maine website kholne ki koshish ki: {url}."
+
+    if intent == "GET_WEATHER":
+        city = params.get("city", "?")
+        return f"Maine {city} ka weather check kiya."
+
+    if intent == "SAVE_MEMORY":
+        key = params.get("key", "?")
+        val = params.get("value", "?")
+        return f"Maine yaad rakha: {key} = {val}."
+
+    if intent == "RECALL_MEMORY":
+        return "Maine saved memories recall kiye."
+
+    if intent == "DELETE_MEMORY":
+        key = params.get("key", "?")
+        return f"Maine memory delete ki: {key}."
+
+    # Android tools
+    if intent == "SEND_WHATSAPP":
+        num = params.get("phone_number", "?")
+        msg = params.get("message", "")
+        if msg:
+            return f"Maine Android se WhatsApp bheja: {num} ko '{msg}'."
+        return f"Maine Android se WhatsApp bheja: {num}."
+
+    if intent == "MAKE_CALL":
+        num = params.get("phone_number", params.get("number", "?"))
+        return f"Maine Android se call kiya: {num}."
+
+    if intent == "SEND_SMS":
+        num = params.get("phone_number", "?")
+        msg = params.get("message", "")
+        return f"Maine Android se SMS bheja: {num} ko '{msg}'."
+
+    # Generic fallback — at least mention the tool name
+    if params:
+        param_str = ", ".join(f"{k}={v!r}" for k, v in list(params.items())[:3])
+        return f"[Tool: {intent}] ({param_str})"
+    return f"[Tool: {intent}]"
+
+
 def run_agent_loop(
     client: Groq,
     user_message: str,
@@ -806,11 +942,19 @@ def run_agent_loop(
     tools = _build_tools()
 
     # ── Seed messages: system prompt + optional history + current user turn ──
-    # History is fetched from the DB when the user is continuing an existing
-    # conversation.  We cap at 10 turns (20 messages) to stay within context
-    # limits.  Anonymous users and new conversations get no history.
-    HISTORY_TURNS = int(os.getenv("AGENT_HISTORY_TURNS", "10"))  # pairs (user+bot)
+    # History priority / merge strategy:
+    #   1. Supabase DB  — authoritative for authenticated users. Fetches up to
+    #                     AGENT_HISTORY_TURNS * 2 persisted messages.
+    #   2. In-memory buffer — covers anonymous users AND fills the gap between
+    #                     what Supabase has persisted and the very latest turns
+    #                     (which are written to the buffer synchronously but to
+    #                     Supabase asynchronously / on next request).
+    # The two sources are de-duplicated by content: if a message already
+    # appears in the DB result, its in-memory duplicate is dropped.
+    HISTORY_TURNS = int(os.getenv("AGENT_HISTORY_TURNS", "20"))  # pairs (user+bot)
     history_msgs: list[dict] = []
+
+    db_contents: set[str] = set()   # track (role, content) to deduplicate
     if user_id and conversation_id:
         try:
             raw_history = get_history(conversation_id, user_id, limit=HISTORY_TURNS * 2)
@@ -819,8 +963,32 @@ def run_agent_loop(
                 content = h.get("content", "").strip()
                 if content:
                     history_msgs.append({"role": role, "content": content})
+                    db_contents.add(f"{role}\x00{content}")
         except Exception as e:
             logger.warning("run_agent_loop: failed to load history: %s", e)
+
+    # Merge in-memory buffer: always run for anonymous users; for authenticated
+    # users add any messages not already returned by the DB (recent turns that
+    # haven't been persisted yet, or the very last exchange).
+    if conversation_id:
+        mem_msgs = _mem_get_history(conversation_id)
+        added = 0
+        for m in mem_msgs:
+            key = f"{m['role']}\x00{m['content']}"
+            if key not in db_contents:
+                history_msgs.append(m)
+                db_contents.add(key)
+                added += 1
+        if added:
+            logger.debug(
+                "run_agent_loop: merged %d in-memory msgs for conv=%s (total history=%d)",
+                added, conversation_id[:8], len(history_msgs),
+            )
+
+    # Enforce the hard cap (oldest messages dropped first)
+    max_hist = HISTORY_TURNS * 2
+    if len(history_msgs) > max_hist:
+        history_msgs = history_msgs[-max_hist:]
 
     messages: list[dict] = [
         {"role": "system", "content": system_prompt},
@@ -1470,13 +1638,13 @@ async def upload_file(
                 conv_id = create_conversation(user_id)
                 title = f"[File] {filename}"[:60]
                 update_conversation_title(conv_id, user_id, title)
-            save_message(conv_id, "user", f"[Uploaded file: {filename}] {safe_prompt}".strip())
+            save_message(conv_id, "user", f"[Uploaded file: {filename}] {safe_prompt}".strip(), user_id=user_id)
             rtype = result.get("type")
             if rtype == "message":
-                save_message(conv_id, "bot", result.get("response", ""))
+                save_message(conv_id, "bot", result.get("response", ""), user_id=user_id)
             elif rtype == "tool_call":
                 bot_text = result.get("response", "") or f"[Tool: {result.get('intent', '')}]"
-                save_message(conv_id, "bot", bot_text, tool_intent=result.get("intent"))
+                save_message(conv_id, "bot", bot_text, user_id=user_id)
         except Exception as e:
             logger.warning("Upload memory save failed (non-fatal): %s", e)
 
@@ -1669,7 +1837,11 @@ def privacy_delete_account(user: dict = Depends(verify_token)):
             errors.append(f"conversations: {e}")
 
     # ── Step 3: delete Supabase auth user ────────────────────────
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    # Check both key names: new SUPABASE_SERVICE_KEY and legacy SUPABASE_SERVICE_ROLE_KEY
+    service_key = (
+        os.getenv("SUPABASE_SERVICE_KEY", "").strip() or
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    )
     supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
     auth_deleted = False
 
@@ -1699,7 +1871,7 @@ def privacy_delete_account(user: dict = Depends(verify_token)):
             errors.append(f"auth delete error: {e}")
     else:
         logger.warning(
-            "Privacy: SUPABASE_SERVICE_ROLE_KEY not set — "
+            "Privacy: SUPABASE_SERVICE_KEY not set — "
             "data wiped but auth user NOT deleted for user=%s",
             user_id[:8],
         )
@@ -1714,7 +1886,7 @@ def privacy_delete_account(user: dict = Depends(verify_token)):
         "message": (
             "Account aur saara data delete ho gaya."
             if auth_deleted
-            else "Data delete ho gaya. Lekin Supabase account delete ke liye SUPABASE_SERVICE_ROLE_KEY set karo."
+            else "Data delete ho gaya. Lekin Supabase account delete ke liye SUPABASE_SERVICE_KEY set karo."
         ),
     }
 
@@ -1727,14 +1899,34 @@ def chat(data: ChatRequest, user: Optional[dict] = Depends(verify_token_optional
 
     user_id = user.get("sub", "") if user else None
 
+    # ── Evict stale in-memory conversations once per request ──────────────
+    _mem_evict_stale()
+
+    # ── Resolve conversation_id ────────────────────────────────────────────
+    # For authenticated users: create a Supabase conversation if needed.
+    # For anonymous users:     generate a local UUID so the in-memory buffer
+    #                          can be keyed and the frontend can re-send it.
+    conv_id = data.conversation_id
+
     if user_id:
         logger.info(
             "Message received (length=%d chars) user=%s…",
             len(user_message),
             user_id[:8],
         )
+        if not conv_id:
+            try:
+                conv_id = create_conversation(user_id)
+                title = user_message[:60].strip()
+                if title:
+                    update_conversation_title(conv_id, user_id, title)
+            except Exception as e:
+                logger.warning("create_conversation failed: %s", e)
     else:
         logger.info("Message received (length=%d chars) user=anonymous", len(user_message))
+        if not conv_id:
+            conv_id = str(_uuid_mod.uuid4())
+            logger.debug("Anonymous session: new conv_id=%s", conv_id[:8])
 
     groq_key = os.getenv("GROQ_API_KEY")
     if not groq_key:
@@ -1747,46 +1939,164 @@ def chat(data: ChatRequest, user: Optional[dict] = Depends(verify_token_optional
     # Falls back to the single-shot path if the loop ever throws unexpectedly,
     # so /chat can never 500 because of the loop.
     try:
-        result = run_agent_loop(client, user_message, user_name=data.user_name, user_id=user_id, conversation_id=data.conversation_id, language=data.language, response_style=data.response_style)
+        result = run_agent_loop(
+            client, user_message,
+            user_name=data.user_name,
+            user_id=user_id,
+            conversation_id=conv_id,
+            language=data.language,
+            response_style=data.response_style,
+        )
     except Exception as e:
         logger.exception("Agent loop failed — falling back to single-shot: %s", e)
         result = groq_with_fallback(client, user_message, user_name=data.user_name, user_id=user_id, language=data.language, response_style=data.response_style)
     logger.info("Response: type=%s intent=%s", result["type"], result.get("intent", "-"))
 
-    # ── Persist messages (only when user is logged in + Supabase configured) ──
-    # This is fire-and-forget: failures are logged but never surfaced to the user.
-    conv_id = data.conversation_id
-    if user_id:
+    # ── Derive the bot reply text for in-memory + DB storage ──────────────
+    rtype = result.get("type")
+    intent = result.get("intent", "")
+    params = result.get("parameters", {})
+
+    if rtype == "message":
+        bot_text = result.get("response", "")
+    elif rtype == "tool_call":
+        # Use the natural-language reply if Groq produced one; otherwise
+        # build a readable summary that includes the actual tool parameters
+        # so future "kya share kiya" queries can see what was done.
+        nl_reply = result.get("response", "").strip()
+        if nl_reply:
+            bot_text = nl_reply
+        else:
+            bot_text = _tool_summary(intent, params)
+    elif rtype == "android_tool_call":
+        # Android tools never produce a server-side NL reply, so always
+        # build the summary from parameters.
+        bot_text = _tool_summary(intent, params)
+    else:
+        bot_text = result.get("response", "")
+
+    # ── Update in-memory buffer (all users) ────────────────────────────────
+    # Always write both turns so the next request can read them back.
+    if conv_id:
+        _mem_append(conv_id, "user",      user_message)
+        _mem_append(conv_id, "assistant", bot_text)
+
+    # ── Persist to Supabase (authenticated users only) ────────────────────
+    if user_id and conv_id:
         try:
-            # Create a new conversation if the frontend didn't send one
-            if not conv_id:
-                conv_id = create_conversation(user_id)
-                # Use the first 60 chars of the user message as the title
-                title = user_message[:60].strip()
-                if title:
-                    update_conversation_title(conv_id, user_id, title)
+            save_message(conv_id, "user", user_message, user_id=user_id)
 
-            # Save user turn
-            save_message(conv_id, "user", user_message)
-
-            # Save bot reply.
-            # - message          : the final text.
-            # - tool_call         : the agent loop's final natural-language response
-            #                       (the action itself is rendered by the frontend).
-            # - android_tool_call : no server-side NL reply yet → keep the intent tag.
-            rtype = result.get("type")
             if rtype == "message":
-                save_message(conv_id, "bot", result.get("response", ""))
+                save_message(conv_id, "bot", result.get("response", ""), user_id=user_id)
             elif rtype == "tool_call":
-                bot_text = result.get("response", "") or f"[Tool: {result.get('intent', '')}]"
-                save_message(conv_id, "bot", bot_text, tool_intent=result.get("intent"))
+                save_message(conv_id, "bot", bot_text, user_id=user_id)
             elif rtype == "android_tool_call":
-                intent = result.get("intent", "")
-                save_message(conv_id, "bot", f"[Tool: {intent}]", tool_intent=intent)
+                save_message(conv_id, "bot", bot_text, user_id=user_id)
 
         except Exception as e:
             logger.warning("Memory save failed (non-fatal): %s", e)
 
     # Always return conv_id so the frontend can track the current conversation
     result["conversation_id"] = conv_id
+    return result
+
+
+# ---------------------------------------------------------------------------
+# /debug/messages  — diagnostic endpoint to test message persistence
+#
+# Requires auth.  Creates a temp conversation, inserts a user + bot message,
+# reads them back, deletes the conversation, and reports what worked/failed.
+# Use this to confirm Supabase RLS / key config is correct.
+# Remove or gate this endpoint before going to production.
+# ---------------------------------------------------------------------------
+@app.get("/debug/messages")
+def debug_messages(user: dict = Depends(verify_token)):
+    """
+    End-to-end test of message persistence (requires auth JWT).
+
+    Returns a JSON object with:
+      db_available    — whether Supabase client initialised
+      conv_created    — whether create_conversation() succeeded
+      user_msg_id     — id of user message inserted (None = insert failed / RLS)
+      bot_msg_id      — id of bot message inserted  (None = insert failed / RLS)
+      messages_read   — list of messages read back   ([] = SELECT failed / RLS)
+      cleanup_ok      — whether the temp conv was deleted
+      diagnosis       — human-readable summary of what to fix
+
+    Common failure → fix mapping:
+      user_msg_id is None AND messages_read is [] →
+        RLS is blocking INSERTs.
+        Fix A (recommended): set SUPABASE_SERVICE_KEY=<service_role_key> in backend/.env
+        Fix B (fallback)   : run backend/schema_v4.sql in Supabase SQL Editor
+    """
+    from database import get_db, is_available
+    from memory import create_conversation, delete_conversation, save_message, get_history
+
+    user_id = user.get("sub", "")
+    result: dict = {
+        "db_available":   False,
+        "conv_created":   False,
+        "user_msg_id":    None,
+        "bot_msg_id":     None,
+        "messages_read":  [],
+        "cleanup_ok":     False,
+        "diagnosis":      "",
+    }
+
+    if not is_available():
+        result["diagnosis"] = (
+            "Supabase not configured. "
+            "Set SUPABASE_URL and SUPABASE_SERVICE_KEY (or SUPABASE_KEY) in backend/.env."
+        )
+        return result
+
+    db = get_db()
+    if db is None:
+        result["diagnosis"] = "Supabase client failed to initialise — check backend logs."
+        return result
+
+    result["db_available"] = True
+
+    # Create a temp conversation
+    conv_id = create_conversation(user_id, title="[debug] message persistence test")
+    if not conv_id:
+        result["diagnosis"] = "create_conversation() returned None — check logs."
+        return result
+    result["conv_created"] = True
+
+    # Insert user message
+    user_msg_id = save_message(conv_id, "user", "debug user message", user_id=user_id)
+    result["user_msg_id"] = user_msg_id
+
+    # Insert bot message
+    bot_msg_id = save_message(conv_id, "bot", "debug bot message", user_id=user_id)
+    result["bot_msg_id"] = bot_msg_id
+
+    # Read back
+    msgs = get_history(conv_id, user_id, limit=10)
+    result["messages_read"] = [
+        {"role": m.get("role"), "content": m.get("content")} for m in msgs
+    ]
+
+    # Cleanup
+    cleanup_ok = delete_conversation(conv_id, user_id)
+    result["cleanup_ok"] = cleanup_ok
+
+    # Diagnosis
+    if user_msg_id and bot_msg_id and len(msgs) == 2:
+        result["diagnosis"] = "✅ Message persistence is working correctly."
+    elif user_msg_id is None:
+        result["diagnosis"] = (
+            "❌ INSERT into messages returned no rows — blocked by Supabase RLS. "
+            "Fix A (recommended): set SUPABASE_SERVICE_KEY=<service_role_key> in backend/.env. "
+            "Fix B (fallback): run backend/schema_v4.sql in the Supabase SQL Editor."
+        )
+    elif not msgs:
+        result["diagnosis"] = (
+            "❌ INSERT succeeded but SELECT returned no rows — blocked by RLS on SELECT. "
+            "Same fix: schema_v4.sql or SUPABASE_SERVICE_KEY."
+        )
+    else:
+        result["diagnosis"] = f"⚠ Partial: {len(msgs)}/2 messages readable. Check logs."
+
     return result
