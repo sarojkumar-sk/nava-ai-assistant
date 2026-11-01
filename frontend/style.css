@@ -1690,6 +1690,36 @@ body {
   .conv-item.active .conv-item-delete { opacity: 0.55; }
 }
 
+/* ── Sidebar skeleton loader ─────────────────────────────── */
+.conv-list-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 2px;
+}
+
+.conv-skeleton-item {
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--bg-hover) 25%,
+    rgba(255,255,255,0.06) 50%,
+    var(--bg-hover) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Vary the widths slightly for a natural look */
+.conv-skeleton-item:nth-child(2) { width: 85%; }
+.conv-skeleton-item:nth-child(3) { width: 70%; }
+
 
 
 /* ============================================================

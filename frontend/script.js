@@ -385,8 +385,9 @@ async function sendDocument(promptText) {
 
     // Track conversation id (same as /chat)
     if (data.conversation_id) {
+      const wasNew = !currentConvId;
       currentConvId = data.conversation_id;
-      loadConversations();
+      loadConversations(wasNew);
     }
 
     setStatus('online', 'Nova Online');
@@ -1182,10 +1183,9 @@ async function sendMessage() {
     const isNewConv = !currentConvId;
     if (data.conversation_id) {
       currentConvId = data.conversation_id;
-      // Refresh the sidebar: always on the very first message of a new conv
-      // (so it appears immediately), and on subsequent messages so the
-      // title and updated_at timestamp stay current.
-      loadConversations();
+      // Force-refresh on the very first message (new conv appears in sidebar);
+      // debounced refresh on subsequent messages in the same conv.
+      loadConversations(isNewConv);
     }
 
     setStatus('online', 'Nova Online');
@@ -1674,7 +1674,7 @@ async function executeDeleteMemory(params, extra = {}) {
       console.warn('[nova] DELETE_MEMORY conv cleanup error:', err?.message || err);
     }
     newChat();
-    loadConversations();
+    loadConversations(true);
   }
 }
 
@@ -2041,7 +2041,8 @@ function newChat() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (isListening) stopListening();
 
-  // Reset conversation state
+  // Reset conversation state FIRST so any in-flight loadConversationMessages
+  // sees currentConvId !== its target and discards the stale result.
   currentConvId = null;
 
   // Deselect sidebar items
@@ -2114,39 +2115,70 @@ function createEmptyState() {
 //  Sidebar list: load, render, select, delete
 // ============================================================
 
+// ── loadConversations throttle state ─────────────────────────
+// Prevents a burst of calls (e.g. on every /chat reply) from hammering
+// the backend.  A call is only issued when:
+//   a) force=true (page load, after delete, after new-conv creation), OR
+//   b) more than _CONV_REFRESH_DEBOUNCE_MS have elapsed since the last call.
+const _CONV_REFRESH_DEBOUNCE_MS = 5000;  // 5 s between routine refreshes
+let _lastConvLoad = 0;
+let _convLoadTimer = null;
+
 /**
  * Fetch the user's conversation list and render it in the sidebar.
- * Called: on page load (after auth), after sending the first message
- * in a new conversation, after deleting a conversation.
+ *
+ * @param {boolean} [force=false]  Skip debounce — use for page load,
+ *   post-delete, and first message of a new conversation.
+ *
  * Silent on failure — history is non-critical.
  */
-async function loadConversations() {
+async function loadConversations(force = false) {
   const user = (typeof getUser === 'function') ? getUser() : null;
   if (!user) return;  // anonymous — no history
 
-  const headers = {};
   const authHeader = (typeof getAuthHeader === 'function') ? getAuthHeader() : null;
-  if (!authHeader) return;  // can't call authenticated route without a token
-  headers['Authorization'] = authHeader;
+  if (!authHeader) return;
+
+  // Debounce: skip if called too recently and not forced
+  const now = Date.now();
+  if (!force && now - _lastConvLoad < _CONV_REFRESH_DEBOUNCE_MS) {
+    // Schedule a single deferred refresh so the sidebar eventually updates
+    clearTimeout(_convLoadTimer);
+    _convLoadTimer = setTimeout(() => loadConversations(true), _CONV_REFRESH_DEBOUNCE_MS);
+    return;
+  }
+  _lastConvLoad = now;
+  clearTimeout(_convLoadTimer);
+
+  // Show a skeleton placeholder while fetching (only when list is currently empty)
+  const list = document.getElementById('convList');
+  if (list && !list.querySelector('.conv-item')) {
+    list.innerHTML =
+      `<div class="conv-list-skeleton" aria-hidden="true">` +
+        `<div class="conv-skeleton-item"></div>` +
+        `<div class="conv-skeleton-item"></div>` +
+        `<div class="conv-skeleton-item"></div>` +
+      `</div>`;
+  }
 
   try {
     const res = await fetch(`${window.API_BASE_URL}/conversations`, {
       method:  'GET',
-      headers,
+      headers: { 'Authorization': authHeader },
       signal:  AbortSignal.timeout(8000),
     });
 
     if (!res.ok) {
-      // 401 = token expired; others = backend issue. Either way, skip silently.
       console.warn('[nova] loadConversations failed:', res.status);
+      if (list && list.querySelector('.conv-list-skeleton')) list.innerHTML = '';
       return;
     }
 
     const data = await res.json();
     renderConversationList(data.conversations || []);
   } catch (err) {
-    // Network error, timeout — non-fatal
     console.warn('[nova] loadConversations error:', err?.message || err);
+    if (list && list.querySelector('.conv-list-skeleton')) list.innerHTML = '';
   }
 }
 
@@ -2321,7 +2353,9 @@ async function selectConversation(convId, title) {
 
 /**
  * Fetch messages for a conversation and render them in the chat area.
- * Shows a loading skeleton while fetching.
+ * Shows a loading spinner while fetching.
+ * Guards against stale loads: if the user switches convs or starts a new
+ * chat before the fetch completes, the results are silently discarded.
  */
 async function loadConversationMessages(convId) {
   // Clear current chat (but don't reset currentConvId)
@@ -2352,6 +2386,13 @@ async function loadConversationMessages(convId) {
       { method: 'GET', headers, signal: AbortSignal.timeout(10000) }
     );
 
+    // Stale-load guard: user may have navigated to a different conv or
+    // clicked New Chat while we were waiting for the response.
+    if (currentConvId !== convId) {
+      loadingEl.remove();
+      return;
+    }
+
     loadingEl.remove();
 
     if (!res.ok) {
@@ -2367,28 +2408,30 @@ async function loadConversationMessages(convId) {
     const messages = data.messages || [];
 
     if (!messages.length) {
-      // Empty conversation — show empty state equivalent
       addMessage('Is conversation mein abhi koi messages nahi hain.', 'bot');
       return;
     }
 
     // Render all messages without speaking them
     messages.forEach(msg => {
-      if (msg.role === 'user') {
-        addMessage(msg.content, 'user');
-      } else if (msg.role === 'bot') {
-        // Tool calls were stored as "[Tool: INTENT]" — show as a tool note
-        if (msg.content.startsWith('[Tool:') && msg.tool_intent) {
-          addMessage(msg.content, 'bot');
-        } else {
-          addMessage(msg.content, 'bot');
-        }
+      const role = msg.role;
+      const content = (msg.content || '').trim();
+      if (!content) return;
+
+      if (role === 'user') {
+        addMessage(content, 'user');
+      } else {
+        // Bot messages: distinguish tool summaries from regular replies.
+        // Tool summaries (from _tool_summary) start with "Maine " or "[Tool:".
+        // We render them all the same way — as bot bubbles — which is correct.
+        addMessage(content, 'bot');
       }
     });
 
     scrollToBottom();
 
   } catch (err) {
+    if (currentConvId !== convId) return;  // stale — silent
     loadingEl.remove();
     if (err.name === 'AbortError' || err.name === 'TimeoutError') {
       addMessage('Conversation load timeout. Dobara try karo.', 'error');
@@ -2425,14 +2468,14 @@ async function deleteConversationUI(convId) {
     newChat();
   }
 
-  // Refresh sidebar list
-  loadConversations();
+  // Force-refresh sidebar list (deletion requires immediate update)
+  loadConversations(true);
 }
 
 // ── Load conversation list on page load ──────────────────────
 // Fires after auth init and welcome message with a short delay.
 // Only runs when a user is logged in.
-setTimeout(loadConversations, 800);
+setTimeout(() => loadConversations(true), 800);
 
 
 
@@ -3170,7 +3213,7 @@ document.getElementById('privacyClearConvsBtn')?.addEventListener('click', async
     if (res.ok && data.ok) {
       // Reset sidebar and chat
       newChat();
-      loadConversations();
+      loadConversations(true);
       addMessage(`✓ All conversations cleared (${data.deleted_count || 0} removed).`, 'bot');
       closeSettings();
     } else {
