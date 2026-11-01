@@ -6,8 +6,8 @@
 //   Render/prod: "https://nava-ai-assistant.onrender.com"
 //
 // Do NOT hardcode this URL inside script.js.
+window.API_BASE_URL = "https://nava-ai-assistant-1.onrender.com";
 
-window.API_BASE_URL = "http://nava-ai-assistant-1.onrender.com";
 
 // ── Supabase (frontend — anon key only, safe to expose) ──────────────────────
 // Used by auth.js for Email + Password authentication with Supabase Auth.
