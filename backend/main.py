@@ -133,7 +133,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://127.0.0.1:3000",
     "https://nava-ai-assistant.onrender.com",
-    "https://saroj-nava-ai.onrender.com",
+    "https://nava-ai-assistant-frontend.onrender.com",
 ]
 
 app.add_middleware(
