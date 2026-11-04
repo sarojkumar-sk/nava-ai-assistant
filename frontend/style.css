@@ -54,6 +54,9 @@
   /* Sidebar */
   --sidebar-width:   240px;
 
+  /* Mobile topbar height — used in both the bar and padding-top of app-shell */
+  --topbar-h:        54px;
+
   /* Radii */
   --r-sm:   8px;
   --r-md:   14px;
@@ -284,19 +287,21 @@ body {
 /* ============================================================
    MOBILE TOP BAR (hidden on desktop)
    ============================================================ */
+/* ============================================================
+   MOBILE TOP BAR (hidden on desktop)
+   ============================================================ */
 .mobile-topbar {
-  display: none;
+  display: none;           /* shown only inside the ≤680px media query */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 54px;
-  /* notch-safe: add env() padding for iOS safe-area */
-  padding-top: env(safe-area-inset-top, 0px);
-  height: calc(54px + env(safe-area-inset-top, 0px));
+  /* Total bar height = base 54px + iOS safe-area notch */
+  height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
   background: var(--bg-sidebar);
   border-bottom: 1px solid var(--border-subtle);
-  align-items: center;
+  align-items: flex-end;   /* icons sit at bottom of bar, above notch space */
+  padding-bottom: 10px;
   padding-left: max(16px, env(safe-area-inset-left, 16px));
   padding-right: max(16px, env(safe-area-inset-right, 16px));
   gap: 12px;
@@ -367,8 +372,8 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
+  /* height comes from flex parent (.app-shell), not viewport directly */
+  height: 100%;
   overflow: hidden;
   background: var(--bg-main);
   /* ensure the main area never exceeds the viewport */
@@ -378,6 +383,7 @@ body {
 /* ── Chat area ────────────────────────────────────────────── */
 .chat-area {
   flex: 1;
+  min-height: 0;        /* required: allows flex child to shrink and scroll */
   overflow-y: auto;
   overflow-x: hidden;   /* prevent horizontal bleed from wide content */
   padding: 28px 0 12px;
@@ -1237,58 +1243,80 @@ body {
    ============================================================ */
 @media (max-width: 680px) {
 
-  /* Show mobile topbar, hide sidebar by default */
+  /* ── Show the fixed topbar ── */
   .mobile-topbar { display: flex; }
 
-  /* Account for topbar height + notch */
+  /* ── App shell: push content below the fixed topbar ──
+     padding-top = topbar height + iOS notch.
+     The shell itself fills the full viewport; the padding
+     carves out the top so children don't go under the bar. */
   .app-shell {
-    padding-top: calc(54px + env(safe-area-inset-top, 0px));
-    overflow: hidden;
+    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
   }
 
+  /* ── Sidebar becomes a fixed off-canvas drawer ── */
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
-    height: 100%;
+    /* Full viewport height — sidebar covers everything including notch */
+    height: 100vh;
     height: 100dvh;
-    /* Wider on mobile — 82vw but never more than 300px */
     width: min(300px, 82vw);
     min-width: unset;
     z-index: 150;
-    transform: translateX(-105%);
-    padding-top: calc(24px + env(safe-area-inset-top, 0px));
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
-    /* Smooth slide */
+    /* Start fully off-screen to the left */
+    transform: translateX(-100%);
+    /* Internal padding: top clears iOS notch, bottom clears home bar */
+    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
                 box-shadow 0.28s ease;
     box-shadow: none;
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .sidebar.open {
     transform: translateX(0);
-    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.55);
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.6);
   }
 
-  /* Overlay: always rendered, visibility via opacity+pointer-events (set at base level now) */
+  /* Overlay: switch on in mobile context */
   .sidebar-overlay {
     display: block;
   }
 
-  /* Main content must not overflow the viewport */
+  /* ── Main content: fills the space below the topbar ──
+     height: 100% means "fill the .app-shell flex container",
+     which already accounts for padding-top. No extra vh math needed. */
   .main-content {
     width: 100%;
-    max-width: 100vw;
+    height: 100%;
     overflow: hidden;
   }
 
-  /* Bubbles: wider on mobile so text has room */
+  /* ── Chat area: scrollable, fills remaining space above input dock ── */
+  .chat-area {
+    flex: 1;
+    min-height: 0;    /* critical: allows flex child to scroll */
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* ── Input dock: anchored to bottom, never cut off ── */
+  .input-dock {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    /* Add home-bar clearance on notched phones */
+    padding-bottom: max(12px, calc(8px + env(safe-area-inset-bottom, 0px)));
+  }
+
+  /* ── Bubbles: wider, no horizontal overflow ── */
   .bubble        { max-width: 90%; font-size: 0.92rem; }
   .bubble--md    { max-width: 92%; }
-  .tool-message .tool-card { max-width: 92%; }
 
-  /* Reduce chat padding so bubbles don't get squished */
+  /* ── Message row padding ── */
   .message,
   .thinking-message,
   .tool-message,
@@ -1298,7 +1326,20 @@ body {
     padding-right: 12px;
   }
 
-  /* Empty state: tighter layout for small screens */
+  /* ── Tool card: full width inside its message row ── */
+  .tool-message .tool-card {
+    max-width: 100%;
+    flex: 1;
+  }
+
+  /* ── Communication card buttons: stack & full width on narrow screens ── */
+  .comm-card-btn {
+    width: 100%;
+    justify-content: center;
+    align-self: stretch;
+  }
+
+  /* ── Empty state: compact ── */
   .empty-state {
     padding: 20px 16px;
     gap: 8px;
@@ -1308,7 +1349,7 @@ body {
   .empty-title   { font-size: clamp(1.2rem, 5vw, 1.6rem); }
   .empty-subtitle { font-size: 0.82rem; }
 
-  /* Suggestions: 1-column, full width, no overflow */
+  /* ── Suggestions grid: single column, full width ── */
   .suggestions-grid {
     grid-template-columns: 1fr;
     max-width: 100%;
@@ -1321,31 +1362,18 @@ body {
     font-size: 0.82rem;
   }
 
-  /* Input dock: tighter padding, safe-area bottom */
-  .input-dock {
-    padding: 8px 10px;
-    padding-bottom: max(12px, calc(12px + env(safe-area-inset-bottom, 0px)));
-    gap: 6px;
-  }
-
+  /* ── Input bar inner ── */
   .input-bar {
     padding: 6px 6px 6px 10px;
   }
 
-  #userInput {
-    font-size: 0.92rem;
-  }
+  #userInput { font-size: 0.92rem; }
 
   .input-hint { display: none; }
 
-  /* Confirmation modal: more padding on tiny screens */
-  .confirm-modal {
-    max-width: min(96vw, 400px);
-  }
-
-  .confirm-modal-inner {
-    padding: 22px 18px 18px;
-  }
+  /* ── Confirmation modal ── */
+  .confirm-modal { max-width: min(96vw, 400px); }
+  .confirm-modal-inner { padding: 22px 18px 18px; }
 }
 
 /* ============================================================
@@ -1384,6 +1412,7 @@ body {
     padding-right: 8px;
   }
 
+  /* Input bar tighter on 360px */
   .input-bar {
     padding: 5px 4px 5px 8px;
     gap: 4px;
@@ -1395,7 +1424,7 @@ body {
     height: 32px;
   }
 
-  /* Sidebar narrower on very small screens */
+  /* Sidebar slightly narrower on very small screens */
   .sidebar {
     width: min(280px, 86vw);
   }
